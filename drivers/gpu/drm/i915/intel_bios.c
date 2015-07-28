@@ -718,6 +718,12 @@ static u8 *goto_next_sequence(u8 *data, int *size)
 
 			data += 3;
 			break;
+		case MIPI_SEQ_ELEM_I2C:
+			/* skip by this element payload size */
+			data += 7;
+			len = *data;
+			data += len + 1;
+			break;
 		default:
 			DRM_ERROR("Unknown element\n");
 			return NULL;

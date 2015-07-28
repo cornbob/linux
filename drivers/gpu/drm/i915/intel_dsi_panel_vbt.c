@@ -31,6 +31,7 @@
 #include <drm/drm_panel.h>
 #include <linux/slab.h>
 #include <video/mipi_display.h>
+#include <linux/i2c.h>
 #include <asm/intel-mid.h>
 #include <video/mipi_display.h>
 #include "i915_drv.h"
@@ -103,6 +104,63 @@ static struct gpio_table gtable[] = {
 	{ GPIO_NC_10_PCONF0, GPIO_NC_10_PAD, 0},
 	{ GPIO_NC_11_PCONF0, GPIO_NC_11_PAD, 0}
 };
+
+static const u8 *mipi_exec_i2c(struct intel_dsi *intel_dsi, const u8 *data)
+{
+	struct i2c_adapter *adapter;
+	int ret;
+	u8 reg_offset, payload_size, retries = 5;
+	struct i2c_msg msg;
+	u8 *transmit_buffer = NULL;
+	u8 flag = *data++;
+	u8 index = *data++;
+	u8 bus_number = *data++;
+	u16 slave_add = *(u16 *)(data);
+
+	data = data + 2;
+	reg_offset = *data++;
+	payload_size = *data++;
+
+	adapter = i2c_get_adapter(bus_number);
+
+	if (!adapter) {
+		DRM_ERROR("i2c_get_adapter(%u) failed, index:%u flag: %u\n",
+				(bus_number + 1), index, flag);
+		goto out;
+	}
+
+	transmit_buffer = kmalloc(1 + payload_size, GFP_TEMPORARY);
+
+	if (!transmit_buffer)
+		goto out;
+
+	transmit_buffer[0] = reg_offset;
+	memcpy(&transmit_buffer[1], data, (size_t)payload_size);
+
+	msg.addr   = slave_add;
+	msg.flags  = 0;
+	msg.len    = 2;
+	msg.buf    = &transmit_buffer[0];
+
+	do {
+		ret =  i2c_transfer(adapter, &msg, 1);
+		if (ret == -EAGAIN)
+			usleep_range(1000, 2500);
+		else if (ret != 1) {
+			DRM_ERROR("i2c transfer failed %d\n", ret);
+			break;
+		}
+	} while (retries--);
+
+	if (retries == 0)
+		DRM_ERROR("i2c transfer failed");
+
+out:
+	kfree(transmit_buffer);
+
+	data = data + payload_size;
+	return data;
+}
 
 static inline enum port intel_dsi_seq_port_to_port(u8 port)
 {
@@ -236,6 +294,7 @@ static const fn_mipi_elem_exec exec_elem[] = {
 	mipi_exec_send_packet,
 	mipi_exec_delay,
 	mipi_exec_gpio,
+	mipi_exec_i2c,
 	NULL, /* status read; later */
 };
 
