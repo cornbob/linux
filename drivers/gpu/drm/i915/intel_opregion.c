@@ -935,11 +935,14 @@ int intel_opregion_setup(struct drm_device *dev)
 	opregion->header = base;
 	opregion->asle = base + OPREGION_ASLE_OFFSET;
 
+	dev_priv->vbt_in_mailbox4 = true;
 	if (opregion->header->opregion_ver >= 2) {
-		if (opregion->asle->rvda)
+		if (opregion->asle->rvda) {
 			vbt_base = acpi_os_ioremap(opregion->asle->rvda,
 						opregion->asle->rvds);
-		else
+			dev_priv->vbt_in_mailbox4 = false;
+			dev_priv->vbt_size = opregion->asle->rvds;
+		} else
 			vbt_base = acpi_os_ioremap(asls + OPREGION_VBT_OFFSET,
 					OPREGION_SIZE - OPREGION_VBT_OFFSET);
 	} else
