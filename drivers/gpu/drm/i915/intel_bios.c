@@ -37,7 +37,8 @@
 static int panel_type;
 
 static const void *
-find_section(const void *_bdb, int section_id)
+find_section(struct drm_i915_private *dev_priv,
+		const void *_bdb, int section_id)
 {
 	const struct bdb_header *bdb = _bdb;
 	const u8 *base = _bdb;
@@ -48,6 +49,11 @@ find_section(const void *_bdb, int section_id)
 	/* skip to first section */
 	index += bdb->header_size;
 	total = bdb->bdb_size;
+
+	if (dev_priv->vbt_in_mailbox4)
+		total = bdb->bdb_size;
+	else
+		total = dev_priv->vbt_size;
 
 	/* walk the sections looking for section_id */
 	while (index + 3 < total) {
@@ -183,7 +189,7 @@ parse_lfp_panel_data(struct drm_i915_private *dev_priv,
 	struct drm_display_mode *panel_fixed_mode;
 	int drrs_mode;
 
-	lvds_options = find_section(bdb, BDB_LVDS_OPTIONS);
+	lvds_options = find_section(dev_priv, bdb, BDB_LVDS_OPTIONS);
 	if (!lvds_options)
 		return;
 
@@ -215,11 +221,12 @@ parse_lfp_panel_data(struct drm_i915_private *dev_priv,
 		break;
 	}
 
-	lvds_lfp_data = find_section(bdb, BDB_LVDS_LFP_DATA);
+	lvds_lfp_data = find_section(dev_priv, bdb, BDB_LVDS_LFP_DATA);
 	if (!lvds_lfp_data)
 		return;
 
-	lvds_lfp_data_ptrs = find_section(bdb, BDB_LVDS_LFP_DATA_PTRS);
+	lvds_lfp_data_ptrs = find_section(dev_priv, bdb,
+					BDB_LVDS_LFP_DATA_PTRS);
 	if (!lvds_lfp_data_ptrs)
 		return;
 
@@ -261,7 +268,7 @@ parse_lfp_backlight(struct drm_i915_private *dev_priv,
 	const struct bdb_lfp_backlight_data *backlight_data;
 	const struct bdb_lfp_backlight_data_entry *entry;
 
-	backlight_data = find_section(bdb, BDB_LVDS_BACKLIGHT);
+	backlight_data = find_section(dev_priv, bdb, BDB_LVDS_BACKLIGHT);
 	if (!backlight_data)
 		return;
 
@@ -309,14 +316,15 @@ parse_sdvo_panel_data(struct drm_i915_private *dev_priv,
 	if (index == -1) {
 		const struct bdb_sdvo_lvds_options *sdvo_lvds_options;
 
-		sdvo_lvds_options = find_section(bdb, BDB_SDVO_LVDS_OPTIONS);
+		sdvo_lvds_options = find_section(dev_priv, bdb,
+						BDB_SDVO_LVDS_OPTIONS);
 		if (!sdvo_lvds_options)
 			return;
 
 		index = sdvo_lvds_options->panel_type;
 	}
 
-	dvo_timing = find_section(bdb, BDB_SDVO_PANEL_DTDS);
+	dvo_timing = find_section(dev_priv, bdb, BDB_SDVO_PANEL_DTDS);
 	if (!dvo_timing)
 		return;
 
@@ -353,7 +361,7 @@ parse_general_features(struct drm_i915_private *dev_priv,
 	struct drm_device *dev = dev_priv->dev;
 	const struct bdb_general_features *general;
 
-	general = find_section(bdb, BDB_GENERAL_FEATURES);
+	general = find_section(dev_priv, bdb, BDB_GENERAL_FEATURES);
 	if (general) {
 		dev_priv->vbt.int_tv_support = general->int_tv_support;
 		dev_priv->vbt.int_crt_support = general->int_crt_support;
@@ -378,7 +386,7 @@ parse_general_definitions(struct drm_i915_private *dev_priv,
 {
 	const struct bdb_general_definitions *general;
 
-	general = find_section(bdb, BDB_GENERAL_DEFINITIONS);
+	general = find_section(dev_priv, bdb, BDB_GENERAL_DEFINITIONS);
 	if (general) {
 		u16 block_size = get_blocksize(general);
 		if (block_size >= sizeof(*general)) {
@@ -409,7 +417,7 @@ parse_sdvo_device_mapping(struct drm_i915_private *dev_priv,
 	int i, child_device_num, count;
 	u16	block_size;
 
-	p_defs = find_section(bdb, BDB_GENERAL_DEFINITIONS);
+	p_defs = find_section(dev_priv, bdb, BDB_GENERAL_DEFINITIONS);
 	if (!p_defs) {
 		DRM_DEBUG_KMS("No general definition block is found, unable to construct sdvo mapping.\n");
 		return;
@@ -495,7 +503,7 @@ parse_driver_features(struct drm_i915_private *dev_priv,
 {
 	const struct bdb_driver_features *driver;
 
-	driver = find_section(bdb, BDB_DRIVER_FEATURES);
+	driver = find_section(dev_priv, bdb, BDB_DRIVER_FEATURES);
 	if (!driver)
 		return;
 
@@ -523,7 +531,7 @@ parse_edp(struct drm_i915_private *dev_priv, const struct bdb_header *bdb)
 	const struct edp_power_seq *edp_pps;
 	const struct edp_link_params *edp_link_params;
 
-	edp = find_section(bdb, BDB_EDP);
+	edp = find_section(dev_priv, bdb, BDB_EDP);
 	if (!edp) {
 		if (dev_priv->vbt.edp_support)
 			DRM_DEBUG_KMS("No eDP BDB found but eDP panel supported.\n");
@@ -634,7 +642,7 @@ parse_psr(struct drm_i915_private *dev_priv, const struct bdb_header *bdb)
 	const struct bdb_psr *psr;
 	const struct psr_table *psr_table;
 
-	psr = find_section(bdb, BDB_PSR);
+	psr = find_section(dev_priv, bdb, BDB_PSR);
 	if (!psr) {
 		DRM_DEBUG_KMS("No PSR BDB found.\n");
 		return;
@@ -772,7 +780,7 @@ parse_mipi(struct drm_i915_private *dev_priv, const struct bdb_header *bdb)
 	/* Parse #52 for panel index used from panel_type already
 	 * parsed
 	 */
-	start = find_section(bdb, BDB_MIPI_CONFIG);
+	start = find_section(dev_priv, bdb, BDB_MIPI_CONFIG);
 	if (!start) {
 		DRM_DEBUG_KMS("No MIPI config BDB found");
 		return;
@@ -803,7 +811,7 @@ parse_mipi(struct drm_i915_private *dev_priv, const struct bdb_header *bdb)
 	dev_priv->vbt.dsi.panel_id = MIPI_DSI_GENERIC_PANEL_ID;
 
 	/* Check if we have sequence block as well */
-	sequence = find_section(bdb, BDB_MIPI_SEQUENCE);
+	sequence = find_section(dev_priv, bdb, BDB_MIPI_SEQUENCE);
 	if (!sequence) {
 		DRM_DEBUG_KMS("No MIPI Sequence found, parsing complete\n");
 		return;
@@ -1087,7 +1095,7 @@ parse_device_mapping(struct drm_i915_private *dev_priv,
 	u8 expected_size;
 	u16 block_size;
 
-	p_defs = find_section(bdb, BDB_GENERAL_DEFINITIONS);
+	p_defs = find_section(dev_priv, bdb, BDB_GENERAL_DEFINITIONS);
 	if (!p_defs) {
 		DRM_DEBUG_KMS("No general definition block is found, no devices defined.\n");
 		return;
