@@ -48,6 +48,7 @@
 #define OPREGION_VBT_OFFSET    0x400
 
 #define OPREGION_SIGNATURE "IntelGraphicsMem"
+#define VBT_SIGNATURE	"$VBT"
 #define MBOX_ACPI      (1<<0)
 #define MBOX_SWSCI     (1<<1)
 #define MBOX_ASLE      (1<<2)
@@ -117,10 +118,12 @@ struct opregion_asle {
 	u32 pcft;       /* power conservation features */
 	u32 srot;       /* supported rotation angles */
 	u32 iuer;       /* IUER events */
-	u64 fdss;
-	u32 fdsp;
-	u32 stat;
-	u8 rsvd[70];
+	u64 fdss;	/* DSS Buffer address allocated for IFFS feature */
+	u32 fdsp;	/* Size of DSS Buffer */
+	u32 stat;	/* State Indicator */
+	u64 rvda;	/* Physical address of raw vbt data */
+	u32 rvds;	/* Size of raw vbt data */
+	u8 rsvd[58];
 } __packed;
 
 /* Driver readiness indicator */
@@ -895,8 +898,10 @@ int intel_opregion_setup(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct intel_opregion *opregion = &dev_priv->opregion;
 	void __iomem *base;
+	void __iomem *vbt_base;
 	u32 asls, mboxes;
 	char buf[sizeof(OPREGION_SIGNATURE)];
+	char vbt_sig_buf[sizeof(VBT_SIGNATURE)];
 	int err = 0;
 
 	BUILD_BUG_ON(sizeof(struct opregion_header) != 0x100);
@@ -915,7 +920,7 @@ int intel_opregion_setup(struct drm_device *dev)
 	INIT_WORK(&opregion->asle_work, asle_work);
 #endif
 
-	base = acpi_os_ioremap(asls, OPREGION_SIZE);
+	base = acpi_os_ioremap(asls, OPREGION_VBT_OFFSET);
 	if (!base)
 		return -ENOMEM;
 
@@ -926,8 +931,31 @@ int intel_opregion_setup(struct drm_device *dev)
 		err = -EINVAL;
 		goto err_out;
 	}
+
 	opregion->header = base;
-	opregion->vbt = base + OPREGION_VBT_OFFSET;
+	opregion->asle = base + OPREGION_ASLE_OFFSET;
+
+	if (opregion->header->opregion_ver >= 2) {
+		if (opregion->asle->rvda)
+			vbt_base = acpi_os_ioremap(opregion->asle->rvda,
+						opregion->asle->rvds);
+		else
+			vbt_base = acpi_os_ioremap(asls + OPREGION_VBT_OFFSET,
+					OPREGION_SIZE - OPREGION_VBT_OFFSET);
+	} else
+		vbt_base = acpi_os_ioremap(asls + OPREGION_VBT_OFFSET,
+					OPREGION_SIZE - OPREGION_VBT_OFFSET);
+
+
+	memcpy_fromio(vbt_sig_buf, vbt_base, sizeof(vbt_sig_buf));
+
+	if (memcmp(vbt_sig_buf, VBT_SIGNATURE, 4)) {
+		DRM_ERROR("VBT signature mismatch\n");
+		err = -EINVAL;
+		goto err_vbt;
+	}
+
+	opregion->vbt = vbt_base;
 
 	opregion->lid_state = base + ACPI_CLID;
 
@@ -951,6 +979,8 @@ int intel_opregion_setup(struct drm_device *dev)
 
 	return 0;
 
+err_vbt:
+	iounmap(vbt_base);
 err_out:
 	iounmap(base);
 	return err;
