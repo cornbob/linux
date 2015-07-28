@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <video/mipi_display.h>
 #include <linux/i2c.h>
+#include <linux/gpio.h>
 #include <asm/intel-mid.h>
 #include <video/mipi_display.h>
 #include "i915_drv.h"
@@ -325,6 +326,16 @@ out:
 	return data;
 }
 
+struct bxt_gpio_table {
+	u16 gpio_pin;
+	u16 offset;
+};
+
+static struct bxt_gpio_table bxt_gtable[] = {
+	{0xC1, 270},
+	{0x1B, 456}
+};
+
 static inline enum port intel_dsi_seq_port_to_port(u8 port)
 {
 	return port ? PORT_C : PORT_A;
@@ -537,6 +548,39 @@ static int vlv_program_gpio(struct intel_dsi *intel_dsi,
 	return 0;
 }
 
+static int bxt_program_gpio(struct intel_dsi *intel_dsi,
+				const u8 *data, const u8 **cur_data)
+{
+	struct drm_device *dev = intel_dsi->base.base.dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	u8 gpio, action;
+	u16 function;
+
+	/*
+	 * Skipping the first byte as it is of no
+	 * interest for android in new version
+	 */
+	if (dev_priv->vbt.dsi.seq_version >= 3)
+		data++;
+
+	gpio = *data++;
+
+	/* pull up/down */
+	action = *data++;
+	function = (bxt_gtable[0].gpio_pin == gpio) ?
+		bxt_gtable[0].offset :
+		(bxt_gtable[1].gpio_pin == gpio) ?
+		bxt_gtable[1].offset : 0;
+	if (!function)
+		return -1;
+
+	gpio_request_one(function, GPIOF_DIR_OUT, "MIPI");
+	gpio_set_value(function, action);
+
+	*cur_data = data;
+	return 0;
+}
+
 static const u8 *mipi_exec_gpio(struct intel_dsi *intel_dsi, const u8 *data)
 {
 	struct drm_device *dev = intel_dsi->base.base.dev;
@@ -550,6 +594,8 @@ static const u8 *mipi_exec_gpio(struct intel_dsi *intel_dsi, const u8 *data)
 		ret = chv_program_gpio(intel_dsi, data, &data);
 	else if (IS_VALLEYVIEW(dev))
 		ret = vlv_program_gpio(intel_dsi, data, &data);
+	else if (IS_BROXTON(dev))
+		ret = bxt_program_gpio(intel_dsi, data, &data);
 	else
 		DRM_ERROR("GPIO programming missing for this platform.\n");
 
