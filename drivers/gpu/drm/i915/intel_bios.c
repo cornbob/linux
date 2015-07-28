@@ -1311,6 +1311,7 @@ intel_parse_bios(struct drm_device *dev)
 	struct drm_i915_private *dev_priv = dev->dev_private;
 	struct pci_dev *pdev = dev->pdev;
 	const struct bdb_header *bdb = NULL;
+	const struct vbt_header *vbt = NULL;
 	u8 __iomem *bios = NULL;
 
 	if (HAS_PCH_NOP(dev))
@@ -1318,10 +1319,14 @@ intel_parse_bios(struct drm_device *dev)
 
 	init_vbt_defaults(dev_priv);
 
-	/* XXX Should this validation be moved to intel_opregion.c? */
-	if (!dmi_check_system(intel_no_opregion_vbt) && dev_priv->opregion.vbt)
-		bdb = validate_vbt(dev_priv->opregion.header, OPREGION_SIZE,
-				   dev_priv->opregion.vbt, "OpRegion");
+	if (!dmi_check_system(intel_no_opregion_vbt) &&
+			dev_priv->opregion.vbt) {
+		vbt = (struct vbt_header *)dev_priv->opregion.vbt;
+		bdb = (struct bdb_header *)(dev_priv->opregion.vbt +
+				vbt->bdb_offset);
+		DRM_DEBUG_KMS("Using VBT from Opregion: %20s\n",
+				vbt->signature);
+	}
 
 	if (bdb == NULL) {
 		size_t size;
