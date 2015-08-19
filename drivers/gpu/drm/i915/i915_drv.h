@@ -1780,7 +1780,9 @@ struct drm_i915_private {
 	/* value is true when VBT is present in mailbox4 */
 	u32 vbt_size;
 
- 	struct i915_hotplug hotplug;
+ 	/*struct i915_hotplug hotplug;
+	 * 
+	 */
 	bool preserve_bios_swizzle;
 
 	/* overlay */
