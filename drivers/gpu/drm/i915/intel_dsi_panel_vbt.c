@@ -313,13 +313,13 @@ static const u8 *mipi_exec_i2c(struct intel_dsi *intel_dsi, const u8 *data)
 		else if (ret == -EAGAIN)
 			usleep_range(1000, 2500);
 		else {
-			DRM_ERROR("i2c transfer failed, error code:%d\n", ret);
+			DRM_ERROR("i2c transfer failed (retry), error code:%d , bus_number:%u ,slave_address:%lu\n", ret,bus_number,slave_add);
 			break;
 		}
 	} while (retries--);
 
 	if (retries == 0)
-		DRM_ERROR("i2c transfer failed, error code:%d", ret);
+		DRM_ERROR("i2c transfer failed, error code:%d , bus_number:%u ,slave_address:%lu\n", ret,bus_number,slave_add);
 
 out:
 	kfree(transmit_buffer);
