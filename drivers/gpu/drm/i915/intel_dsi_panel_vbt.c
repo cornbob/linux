@@ -313,13 +313,13 @@ static const u8 *mipi_exec_i2c(struct intel_dsi *intel_dsi, const u8 *data)
 		else if (ret == -EAGAIN)
 			usleep_range(1000, 2500);
 		else {
-			DRM_ERROR("i2c transfer failed (retry), error code:%d , bus_number:%u ,slave_address:%lu\n", ret,bus_number,slave_add);
+			DRM_ERROR("i2c transfer failed (retry), error code:%d , bus_number:%u ,slave_address:%u\n", ret,bus_number,slave_add);
 			break;
 		}
 	} while (retries--);
 
 	if (retries == 0)
-		DRM_ERROR("i2c transfer failed, error code:%d , bus_number:%u ,slave_address:%lu\n", ret,bus_number,slave_add);
+		DRM_ERROR("i2c transfer failed, error code:%d , bus_number:%u ,slave_address:%u\n", ret,bus_number,slave_add);
 
 out:
 	kfree(transmit_buffer);
@@ -683,7 +683,7 @@ static void generic_exec_sequence(struct intel_dsi *intel_dsi, const u8 *data)
 	}
 }
 
-static int vbt_panel_prepare(struct drm_panel *panel)
+static int vbt_panel_reset(struct drm_panel *panel)
 {
 	struct vbt_panel *vbt_panel = to_vbt_panel(panel);
 	struct intel_dsi *intel_dsi = vbt_panel->intel_dsi;
@@ -693,6 +693,17 @@ static int vbt_panel_prepare(struct drm_panel *panel)
 
 	sequence = dev_priv->vbt.dsi.sequence[MIPI_SEQ_ASSERT_RESET];
 	generic_exec_sequence(intel_dsi, sequence);
+
+	return 0;
+}
+
+static int vbt_panel_prepare(struct drm_panel *panel)
+{
+	struct vbt_panel *vbt_panel = to_vbt_panel(panel);
+	struct intel_dsi *intel_dsi = vbt_panel->intel_dsi;
+	struct drm_device *dev = intel_dsi->base.base.dev;
+	struct drm_i915_private *dev_priv = dev->dev_private;
+	const u8 *sequence;
 
 	sequence = dev_priv->vbt.dsi.sequence[MIPI_SEQ_INIT_OTP];
 	generic_exec_sequence(intel_dsi, sequence);
@@ -839,6 +850,7 @@ static const struct drm_panel_funcs vbt_panel_funcs = {
 	.disable = vbt_panel_disable,
 	.unprepare = vbt_panel_unprepare,
 	.prepare = vbt_panel_prepare,
+	.reset = vbt_panel_reset,
 	.enable = vbt_panel_enable,
 	.get_modes = vbt_panel_get_modes,
 	.power_on = vbt_panel_power_on,
