@@ -435,6 +435,10 @@ int spi_add_device(struct spi_device *spi)
 		return -EINVAL;
 	}
 
+	dev_info(dev, "cs%d < max %d\n",
+		spi->chip_select,
+		master->num_chipselect);
+
 	/* Set the bus ID string */
 	spi_dev_set_name(spi);
 
@@ -1494,6 +1498,17 @@ static int acpi_spi_add_resource(struct acpi_resource *ares, void *data)
 			spi->chip_select = sb->device_selection;
 			spi->max_speed_hz = sb->connection_speed;
 
+			dev_info(&spi->dev, "acpi_spi_add_resource : chip_select = %d for %s\n",
+					spi->chip_select,
+					dev_name(&ares->dev));
+
+			if (spi->chip_select > 0 ) {
+				spi->chip_select--;
+				dev_info(&spi->dev, "acpi_spi_add_resource : new chip_select = %d for %s\n",
+					spi->chip_select,
+					dev_name(&ares->dev));
+			}
+
 			if (sb->clock_phase == ACPI_SPI_SECOND_PHASE)
 				spi->mode |= SPI_CPHA;
 			if (sb->clock_polarity == ACPI_SPI_START_HIGH)
@@ -1506,7 +1521,14 @@ static int acpi_spi_add_resource(struct acpi_resource *ares, void *data)
 
 		if (acpi_dev_resource_interrupt(ares, 0, &r))
 			spi->irq = r.start;
+
+		dev_info(&spi->dev, "acpi_spi_add_resource : irq < 0, acpi_dev_resource_interrupt SPI device for %s\n",
+			dev_name(&ares->dev));
 	}
+
+	dev_info(&spi->dev, "acpi_spi_add_resource : irq = %d SPI device for %s\n",
+		spi->irq,
+		dev_name(&ares->dev));
 
 	/* Always tell the ACPI core to skip this resource */
 	return 1;
@@ -1532,6 +1554,8 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 			dev_name(&adev->dev));
 		return AE_NO_MEMORY;
 	}
+	dev_info(&master->dev, "allocated SPI device for %s\n",
+		dev_name(&adev->dev));
 
 	ACPI_COMPANION_SET(&spi->dev, adev);
 	spi->irq = -1;
@@ -1543,6 +1567,8 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 
 	if (ret < 0 || !spi->max_speed_hz) {
 		spi_dev_put(spi);
+		dev_info(&master->dev, "add SPI device %s from ACPI w/o any additonal ACPI ressources\n",
+			dev_name(&adev->dev));
 		return AE_OK;
 	}
 
@@ -1555,6 +1581,8 @@ static acpi_status acpi_spi_add_device(acpi_handle handle, u32 level,
 		spi_dev_put(spi);
 	}
 
+	dev_info(&master->dev, "add SPI device %s from ACPI done\n",
+			dev_name(&adev->dev));
 	return AE_OK;
 }
 
