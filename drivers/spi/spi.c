@@ -1498,15 +1498,13 @@ static int acpi_spi_add_resource(struct acpi_resource *ares, void *data)
 			spi->chip_select = sb->device_selection;
 			spi->max_speed_hz = sb->connection_speed;
 
-			dev_info(&spi->dev, "acpi_spi_add_resource : chip_select = %d for %s\n",
-					spi->chip_select,
-					dev_name(&ares->dev));
+			dev_info(&spi->dev, "acpi_spi_add_resource : chip_select = %d\n",
+					spi->chip_select);
 
 			if (spi->chip_select > 0 ) {
 				spi->chip_select--;
-				dev_info(&spi->dev, "acpi_spi_add_resource : new chip_select = %d for %s\n",
-					spi->chip_select,
-					dev_name(&ares->dev));
+				dev_info(&spi->dev, "acpi_spi_add_resource : new chip_select = %d\n",
+					spi->chip_select);
 			}
 
 			if (sb->clock_phase == ACPI_SPI_SECOND_PHASE)
@@ -1522,13 +1520,11 @@ static int acpi_spi_add_resource(struct acpi_resource *ares, void *data)
 		if (acpi_dev_resource_interrupt(ares, 0, &r))
 			spi->irq = r.start;
 
-		dev_info(&spi->dev, "acpi_spi_add_resource : irq < 0, acpi_dev_resource_interrupt SPI device for %s\n",
-			dev_name(&ares->dev));
+		dev_info(&spi->dev, "acpi_spi_add_resource : irq < 0, acpi_dev_resource_interrupt SPI device\n");
 	}
 
-	dev_info(&spi->dev, "acpi_spi_add_resource : irq = %d SPI device for %s\n",
-		spi->irq,
-		dev_name(&ares->dev));
+	dev_info(&spi->dev, "acpi_spi_add_resource : irq = %d SPI device\n",
+		spi->irq);
 
 	/* Always tell the ACPI core to skip this resource */
 	return 1;
